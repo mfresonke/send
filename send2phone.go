@@ -1,17 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
-	"time"
 
 	"github.com/jessevdk/go-flags"
+	"github.com/mfresonke/send2phone/tunneler/ngrok"
 )
 
 const debug = true
@@ -38,21 +34,16 @@ func main() {
 		opts.Verbose = true
 	}
 	// check for dependencies
-	if opts.Verbose {
-		fmt.Println("Searching for ngrok in path...")
-	}
-	ngrokLoc, err := exec.LookPath("ngrok")
+	tunnel := ngrok.NewTunnel(opts.Verbose)
+	url, err := tunnel.Open(opts.Port)
 	check(err)
-	if opts.Verbose {
-		fmt.Println("ngrok found at ", ngrokLoc)
-	}
+	fmt.Println(url)
+
 	//check for config
 	_, err = loadConfig()
 	check(err)
 
 	// ====== Application Logic ======
-	// run ngrok to be sure there are no issues
-	runNGROK(opts.Port)
 
 	// check the extension of the given file to make sure it is compatible with twilio
 	fileExt := filepath.Ext(opts.Args.Input)
@@ -61,39 +52,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	tunnelURL, err := runNGROK(opts.Port)
-	check(err)
-	if opts.Verbose {
-		fmt.Println("NGROK Tunnel established at: ", tunnelURL)
-	}
-
-}
-
-func runNGROK(port int) (tunnelURL string, err error) {
-	cmd := exec.Command("ngrok", "http", strconv.Itoa(port))
-	cmd.Start()
-	go func() {
-		err := cmd.Wait()
-		check(err)
-	}()
-	// allow ngrok time to establish itself
-	time.Sleep(5 * time.Second)
-	// make a request to the ngrok api to check the URL
-	resp, err := http.Get("http://127.0.0.1:4040/api/tunnels")
-	check(err)
-	jsonDec := json.NewDecoder(resp.Body)
-	check(err)
-	var res struct {
-		Tunnels []struct {
-			URL string `json:"public_url"`
-		} `json:"tunnels"`
-	}
-	jsonDec.Decode(&res)
-	if len(res.Tunnels) != 1 {
-		ErrPrintln("Error, tunnel not detected in ngrok.")
-		os.Exit(1)
-	}
-	return res.Tunnels[0].URL, nil
 }
 
 var isValidPhotoExtRegex = regexp.MustCompile(".*(.jpg|.jpeg|.gif|.png|.bmp)")
