@@ -6,21 +6,44 @@ import (
 	"testing"
 )
 
-func TestOpen(t *testing.T) {
+func TestNGROK(t *testing.T) {
 	tunnel := NewTunnel(true)
-	tunnelURL, err := tunnel.Open(7070)
+	endpoints, err := tunnel.Open(7070)
 	if err != nil {
 		t.Fatal("Error opening tunnel. Recieved error: ", err)
 	}
 	defer tunnel.Close()
-	// now that we know the tunnel is open, let's make sure the URL makes sense.
-	// this really just means that the url contains the string "ngrok.io" with
-	// something before and after it.
-	url, err := url.Parse(tunnelURL)
-	if err != nil {
-		t.Error(err)
+	// Now that we know the tunnel is open, let's make sure the Endpoints make
+	//  sense. Ngrok will return exactly two: one secure (https) and one insecure.
+	foundSecure := false
+	foundInsecure := false
+	for _, ep := range endpoints {
+		// Let's validate the URL itself.
+		url, err := url.Parse(ep.URL)
+		if err != nil {
+			t.Error(err)
+		}
+		if !strings.Contains(url.Host, "ngrok.io") {
+			t.Error("ngrok.io not detected in returned url")
+		}
+		isHTTPS := (url.Scheme == "https")
+		// check the "Secure" flag on the endpoint struct.
+		if isHTTPS != ep.Secure {
+			t.Error("Secure flag on endpoint not marked properly.")
+		}
+		if isHTTPS && ep.Secure && !foundSecure {
+			foundSecure = true
+		}
+		if !isHTTPS && !ep.Secure && !foundInsecure {
+			foundInsecure = true
+		}
 	}
-	if !strings.Contains(url.Host, "ngrok.io") {
-		t.Error("ngrok.io not detected in returned url")
+	if !foundSecure {
+		t.Error("Did not find secure endpoint")
+	}
+	if !foundInsecure {
+		t.Error("Did not find insecure endpoint")
 	}
 }
+
+func TestDoubleClose(t *testing.T)
