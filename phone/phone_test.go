@@ -3,6 +3,8 @@ package phone
 import (
 	"os"
 	"testing"
+
+	"github.com/mfresonke/ngrokker"
 )
 
 const (
@@ -13,9 +15,24 @@ const (
 	testingAcceptedTwilioTOS = true
 )
 
+type testTunnel struct{}
+
+func (tt testTunnel) Open(port int) ([]ngrokker.Endpoint, error) {
+	return nil, nil
+}
+
+func (tt testTunnel) Close() error {
+	return nil
+}
+
 func testingSender() *Sender {
-	return NewSender(
-		testingAcceptedNGROKTOS, testingAcceptedTwilioTOS,
+	return NewSenderTunnel(
+		testTunnel{},
+		TwilioConfig{
+			SID:       "SID",
+			AuthToken: "Auth",
+			SenderNum: "SomeValidNum",
+		},
 		testingPort,
 		testingVerbose,
 	)

@@ -2,9 +2,11 @@
 package phone
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 
 	"github.com/mfresonke/ngrokker"
 )
@@ -16,38 +18,42 @@ type Sender struct {
 	verbose bool
 	port    int
 	tunnel  ngrokker.Tunneler
+	config  TwilioConfig
 }
 
 //NewSender creates a new sender object with the specified options. Utilizes the
 // ngrokker pkg, and in turn, ngrok, for its introspective tunneling purposes,
-// and Twilio for its MMS sending purposes. If you'd like to override these
-// services with something else (or provide alternate options to those services)
-// see the NewCustomSender method.
+// and Twilio for its MMS sending purposes. If you'd like to override the tunneling
+// service with something else, use NewSenderTunnel.
 //
-//Users must accept the ngrok and Twilio ToS before sending anything.
+//A valid Twilio Configuration is needed to be able to properly send a message.
+//
+//Users must accept the ngrok ToS before sending anything.
 //
 //Port will be used to create a local webserver and introspective tunnel, if
 // necessary. The port must not be currently in use by another process.
 //
 //Verbose prints diagnostic information to stderr.
 func NewSender(
+	config TwilioConfig,
 	acceptedNGROKTOS bool,
 	port int,
 	verbose bool,
 ) *Sender {
 	tunnel := ngrokker.NewHTTPTunnel(acceptedNGROKTOS, verbose)
-	return NewCustomSender(tunnel, port, verbose)
+	return NewSenderTunnel(tunnel, config, port, verbose)
 }
 
-//NewCustomSender is similar to NewSender, except that it allows you to
+//NewSenderTunnel is similar to NewSender, except that it allows you to
 // override the introspective tunneling service with your own.
-//This is also useful for testing purposes.
-func NewCustomSender(
+func NewSenderTunnel(
 	tunnel ngrokker.Tunneler,
+	config TwilioConfig,
 	port int,
 	verbose bool,
 ) *Sender {
 	return &Sender{
+		config:  config,
 		tunnel:  tunnel,
 		port:    port,
 		verbose: verbose,
@@ -72,11 +78,20 @@ func (s Sender) SendFile(phoneNumber, filePath string) error {
 		return ErrFiletypeNotSupported
 	}
 
-	// open the introspective tunnel
-	tunnel := ngrokker.NewHTTPTunnel(s.acceptedNGROKTOS, s.verbose)
-	_, err := tunnel.Open(s.port)
+	// start the go webserver to serve the image
+	webserverErrChan := make(chan error, 1)
+	go serveImage(webserverErrChan, s.port, filePath)
+
+	//open the introspective tunnel
+	_, err := s.tunnel.Open(s.port)
 	if err != nil {
 		return err
+	}
+
+	// at some point check the channels for errors
+	select {
+	case _ = <-webserverErrChan:
+		//do something useful
 	}
 
 	return nil
@@ -86,4 +101,12 @@ var isValidPhotoExtRegex = regexp.MustCompile(".*(.jpg|.jpeg|.gif|.png|.bmp)")
 
 func isValidPhotoExt(fileExtension string) bool {
 	return isValidPhotoExtRegex.MatchString(fileExtension)
+}
+
+func serveImage(errorChan chan error, port int, filePath string) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filePath)
+	})
+	bindStr := ":" + strconv.Itoa(port)
+	errorChan <- http.ListenAndServe(bindStr, nil)
 }
