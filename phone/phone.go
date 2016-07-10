@@ -4,14 +4,18 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/mfresonke/ngrokker"
 )
 
 //Sender holds the necessary values for sending supported data to a phone.
 //
 //Must be initalized with the NewSender func.
 type Sender struct {
-	verbose bool
-	port    int
+	acceptedNGROKTOS  bool
+	acceptedTwilioTOS bool
+	verbose           bool
+	port              int
 }
 
 //NewSender creates a sender object with the specified options.
@@ -19,10 +23,16 @@ type Sender struct {
 //port must be a port that is not currently in use by another process.
 //
 //verbose prints diagnostic information to stderr.
-func NewSender(port int, verbose bool) *Sender {
+func NewSender(
+	acceptedNGROKTOS, acceptedTwilioTOS bool,
+	port int,
+	verbose bool,
+) *Sender {
 	return &Sender{
-		port:    port,
-		verbose: verbose,
+		acceptedTwilioTOS: acceptedTwilioTOS,
+		acceptedNGROKTOS:  acceptedNGROKTOS,
+		port:              port,
+		verbose:           verbose,
 	}
 }
 
@@ -30,7 +40,7 @@ func NewSender(port int, verbose bool) *Sender {
 //
 //Currently, it only supports photos, but support for additional files
 // is planned.
-func (sender Sender) SendFile(phoneNumber, filePath string) error {
+func (s Sender) SendFile(phoneNumber, filePath string) error {
 	// check that the given file exists and is not a directory
 	if fileInfo, err := os.Stat(filePath); os.IsNotExist(err) {
 		return ErrFileDoesNotExist
@@ -43,6 +53,14 @@ func (sender Sender) SendFile(phoneNumber, filePath string) error {
 	if ok := isValidPhotoExt(fileExt); !ok {
 		return ErrFiletypeNotSupported
 	}
+
+	// open the introspective tunnel
+	tunnel := ngrokker.NewHTTPTunnel(s.acceptedNGROKTOS, s.verbose)
+	_, err := tunnel.Open(s.port)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

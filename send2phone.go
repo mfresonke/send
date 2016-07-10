@@ -1,12 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	"github.com/jessevdk/go-flags"
-	"github.com/mfresonke/ngrokker"
 )
 
 const debug = true
@@ -33,12 +30,6 @@ func main() {
 	if debug {
 		opts.Verbose = true
 	}
-	// start the w
-	// open the introspective tunnel
-	tunnel := ngrokker.NewHTTPTunnel(true, opts.Verbose)
-	url, err := tunnel.Open(opts.Port)
-	check(err)
-	fmt.Println(url)
 
 	//check for config
 	_, err = loadConfig()
@@ -72,9 +63,4 @@ func loadConfig() (phoneConfig, error) {
 			"maxs-phone": "+14075758643",
 		},
 	}, nil
-}
-
-// ErrPrintln prints a string to standard error.
-func ErrPrintln(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
 }
