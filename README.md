@@ -1,5 +1,7 @@
 # send2phone
-A CLI go app to send files to your phone and other devices.
+A CLI go app to send pictures to your phone using MMS.
+
+This app is not yet functional.
 
 ## Usage
 `send2phone funny-photo.png`
