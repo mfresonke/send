@@ -3,7 +3,6 @@ package ngrok
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
@@ -11,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/mfresonke/send2phone/tunneler"
 )
 
@@ -19,12 +17,12 @@ const (
 	// how long to wait for ngrok before giving up
 	connectionTimeout = 20 * time.Second
 	// how long to wait before beginning to poll for a connection.
-	initalConnectionWait = 5 * time.Second
-	//urlPollHTTPTimeout   = 500 * time.Millisecond
+	initalConnectionWait = 1 * time.Second
 	// how long to wait between poll attempts (given the previous one did not succeed)
-	urlPollDuration         = 1 * time.Second
-	sigtermPollDuration     = 200 * time.Millisecond
-	sigtermRetriesUntilKill = 20
+	urlPollDuration          = 1 * time.Second
+	sigtermPollDuration      = 200 * time.Millisecond
+	sigtermRetriesUntilKill  = 20
+	processStatePollDuration = 1 * time.Second
 )
 
 const tunnelsURL = "http://127.0.0.1:4040/api/tunnels"
@@ -32,6 +30,7 @@ const tunnelsURL = "http://127.0.0.1:4040/api/tunnels"
 type tunnel struct {
 	*exec.Cmd
 	verbose bool
+	opened  bool
 }
 
 // NewTunnel creates a new ngrok tunnel, ready to open!
@@ -41,29 +40,44 @@ func NewTunnel(verbose bool) tunneler.Interface {
 	}
 }
 
+// Open starts the ngrok process and waits for a connection. Upon sucess, it
+//  returns botht he secure and insecure endpoints that the ngrok process has
+//  established.
 func (tun *tunnel) Open(port int) ([]tunneler.Endpoint, error) {
+	if tun.opened {
+		return nil, errors.New("Tunnel already opened.")
+	}
+	tun.opened = true
+
 	if tun.verbose {
-		fmt.Println("Searching for ngrok in path...")
+		log.Println("Searching for ngrok in path...")
 	}
 	ngrokLoc, err := exec.LookPath("ngrok")
 	if err != nil {
 		return nil, err
 	}
 	if tun.verbose {
-		fmt.Println("ngrok found at ", ngrokLoc)
+		log.Println("ngrok found at ", ngrokLoc)
 	}
 
-	// create and start ngrok!
+	// create the ngrok command, and embed it into our tunnel struct.
 	tun.Cmd = exec.Command("ngrok", "http", strconv.Itoa(port))
-	err = tun.Start()
-	if err != nil {
-		return nil, err
-	}
 
-	// channel will send an error if the process exits unexpectedly.
+	// channel will start ngrok and send an error if it quits unexpectedly.
 	errorChan := make(chan error, 1)
 	go func(errorChan chan error) {
-		errorChan <- tun.Wait()
+		output, err := tun.CombinedOutput()
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		// in the "happy case", there is no output from ngrok. So if there is ANY
+		//  output, we treat it as an error.
+		if len(output) > 0 {
+			errorChan <- newOutputError(output)
+		}
+		// yaaay! no errors! close the channel before returning.
+		close(errorChan)
 	}(errorChan)
 
 	// channel will recieve the string of the connection URL.
@@ -86,12 +100,26 @@ func (tun *tunnel) Open(port int) ([]tunneler.Endpoint, error) {
 	case <-timeoutChan:
 		return nil, errors.New("NGROK startup timed out")
 	}
-	spew.Dump(endpoints)
 	return endpoints, nil
 }
 
+// exited is a helper func that returns true if the ngrok process has shut down
+//  successfully.
+func (tun *tunnel) exited() bool {
+	return tun.ProcessState != nil && tun.ProcessState.Exited()
+}
+
+// Close stops the ngrok process, ending the tunnel. Can be safely called multiple times.
 func (tun *tunnel) Close() error {
-	if tun.ProcessState.Exited() {
+	if !tun.opened {
+		if tun.verbose {
+			log.Println("Close called and tunnel not started. Returning nil")
+		}
+		return nil
+	}
+	tun.opened = false
+
+	if tun.exited() {
 		return nil
 	}
 	if tun.verbose {
@@ -100,12 +128,10 @@ func (tun *tunnel) Close() error {
 	tun.Process.Signal(syscall.SIGTERM)
 	for i := 0; i != sigtermRetriesUntilKill; i++ {
 		if tun.verbose {
-			if tun.verbose {
-				log.Println("Waiting for ngrok process to shutdown...", i+1)
-			}
+			log.Println("Waiting for ngrok process to shutdown...", i+1)
 		}
 		time.Sleep(sigtermPollDuration)
-		if tun.ProcessState.Exited() {
+		if tun.exited() {
 			if tun.verbose {
 				log.Println("NGROK shutdown sucessful.")
 			}

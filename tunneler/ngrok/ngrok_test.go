@@ -6,9 +6,14 @@ import (
 	"testing"
 )
 
+const (
+	testingPort    = 7070
+	testingVerbose = true
+)
+
 func TestNGROK(t *testing.T) {
-	tunnel := NewTunnel(true)
-	endpoints, err := tunnel.Open(7070)
+	tunnel := NewTunnel(testingVerbose)
+	endpoints, err := tunnel.Open(testingPort)
 	if err != nil {
 		t.Fatal("Error opening tunnel. Recieved error: ", err)
 	}
@@ -46,4 +51,18 @@ func TestNGROK(t *testing.T) {
 	}
 }
 
-func TestDoubleClose(t *testing.T)
+func TestDoubleClose(t *testing.T) {
+	tunnel := NewTunnel(testingVerbose)
+	_, err := tunnel.Open(testingPort)
+	if err != nil {
+		t.Fatal("Error opening tunnel. Recieved error: ", err)
+	}
+	err = tunnel.Close()
+	if err != nil {
+		t.Fatal("Error closing tunnel. Recieved error: ", err)
+	}
+	err = tunnel.Close()
+	if err != nil {
+		t.Fatal("Error closing tunnel second time. Recieved error: ", err)
+	}
+}
