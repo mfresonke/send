@@ -8,11 +8,11 @@ import (
 
 const (
 	testingPort    = 7070
-	testingVerbose = true
+	testingVerbose = false
 )
 
-func TestNGROK(t *testing.T) {
-	tunnel := NewTunnel(testingVerbose)
+func TestHTTP(t *testing.T) {
+	tunnel := NewHTTPTunnel(testingVerbose)
 	endpoints, err := tunnel.Open(testingPort)
 	if err != nil {
 		t.Fatal("Error opening tunnel. Recieved error: ", err)
@@ -51,8 +51,9 @@ func TestNGROK(t *testing.T) {
 	}
 }
 
+// TestDoubleClose tests if calling the "Close" method twice returns an error.
 func TestDoubleClose(t *testing.T) {
-	tunnel := NewTunnel(testingVerbose)
+	tunnel := NewHTTPTunnel(testingVerbose)
 	_, err := tunnel.Open(testingPort)
 	if err != nil {
 		t.Fatal("Error opening tunnel. Recieved error: ", err)
@@ -64,5 +65,24 @@ func TestDoubleClose(t *testing.T) {
 	err = tunnel.Close()
 	if err != nil {
 		t.Fatal("Error closing tunnel second time. Recieved error: ", err)
+	}
+}
+
+// TestTwoOpen tests if opening two ngrok connections returns an Err
+func TestTwoOpen(t *testing.T) {
+	tunnel1 := NewHTTPTunnel(testingVerbose)
+	tunnel2 := NewHTTPTunnel(testingVerbose)
+	_, err := tunnel1.Open(testingPort)
+	if err != nil {
+		t.Fatal("Error opening fist tunnel. Recieved error: ", err)
+	}
+	defer tunnel1.Close()
+	_, err = tunnel2.Open(testingPort + 1)
+	if err == nil {
+		t.Fatal("No error returned upon opening second tunnel.")
+	}
+	defer tunnel2.Close()
+	if err != ErrTooManyConnections {
+		t.Error("ErrTooManyConnections not returned upon opening a second ngrok session")
 	}
 }

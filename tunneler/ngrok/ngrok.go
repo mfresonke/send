@@ -33,8 +33,8 @@ type tunnel struct {
 	opened  bool
 }
 
-// NewTunnel creates a new ngrok tunnel, ready to open!
-func NewTunnel(verbose bool) tunneler.Interface {
+// NewHTTPTunnel creates a new ngrok http tunnel, ready to open!
+func NewHTTPTunnel(verbose bool) tunneler.Interface {
 	return &tunnel{
 		verbose: verbose,
 	}
