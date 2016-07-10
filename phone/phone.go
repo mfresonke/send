@@ -20,6 +20,8 @@ type Sender struct {
 
 //NewSender creates a sender object with the specified options.
 //
+//Users must accept the ngrok and Twilio ToS before sending anything.
+//
 //port must be a port that is not currently in use by another process.
 //
 //verbose prints diagnostic information to stderr.
