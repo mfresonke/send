@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"path/filepath"
-	"regexp"
 
 	"github.com/jessevdk/go-flags"
-	"github.com/mfresonke/send2phone/tunneler/ngrok"
+	"github.com/mfresonke/ngrokker"
 )
 
 const debug = true
@@ -26,6 +25,7 @@ type options struct {
 
 func main() {
 	// ====== Setup ======
+	// parse the cmdline opts
 	var opts options
 	_, err := flags.Parse(&opts)
 	check(err)
@@ -33,8 +33,9 @@ func main() {
 	if debug {
 		opts.Verbose = true
 	}
-	// check for dependencies
-	tunnel := ngrok.NewTunnel(opts.Verbose)
+	// start the w
+	// open the introspective tunnel
+	tunnel := ngrokker.NewHTTPTunnel(true, opts.Verbose)
 	url, err := tunnel.Open(opts.Port)
 	check(err)
 	fmt.Println(url)
@@ -45,38 +46,29 @@ func main() {
 
 	// ====== Application Logic ======
 
-	// check the extension of the given file to make sure it is compatible with twilio
-	fileExt := filepath.Ext(opts.Args.Input)
-	if ok := isValidPhotoExt(fileExt); !ok {
-		ErrPrintln("Error, image filetype is not supported.")
-		os.Exit(1)
-	}
-
-}
-
-var isValidPhotoExtRegex = regexp.MustCompile(".*(.jpg|.jpeg|.gif|.png|.bmp)")
-
-func isValidPhotoExt(fileExtension string) bool {
-	return isValidPhotoExtRegex.MatchString(fileExtension)
 }
 
 func check(err error) {
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		panic(err)
 	}
 }
 
-type config struct {
-	PhoneNumbers map[string]phoneNumber
-	Default      string
+type phoneConfig struct {
+	Numbers map[string]phoneNumber
+	Default string
 }
 
-func loadConfig() (config, error) {
+func (pc phoneConfig) defaultNumber() phoneNumber {
+	return pc.Numbers[pc.Default]
+}
+
+func loadConfig() (phoneConfig, error) {
 	//fake it for now
-	return config{
+	return phoneConfig{
 		Default: "maxs-phone",
-		PhoneNumbers: map[string]phoneNumber{
+		Numbers: map[string]phoneNumber{
 			"maxs-phone": "+14075758643",
 		},
 	}, nil
