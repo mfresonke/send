@@ -6,20 +6,38 @@ import (
 )
 
 const (
-	testingPort        = 7070
-	testingVerbose     = false
-	testingValidNumber = "+14071111111"
+	testingPort              = 7070
+	testingVerbose           = false
+	testingValidNumber       = "+14071111111"
+	testingAcceptedNGROKTOS  = true
+	testingAcceptedTwilioTOS = true
 )
 
-func TestErrFileDoesNotExist(t *testing.T) {
-	sender := NewSender(testingPort, testingVerbose)
-	err := sender.SendFile(testingValidNumber, "/this/does/not/exist")
+func testingSender() *Sender {
+	return NewSender(
+		testingAcceptedNGROKTOS, testingAcceptedTwilioTOS,
+		testingPort,
+		testingVerbose,
+	)
+}
+
+func expectError(t *testing.T, err, expectedErr error, optionalMsg string) {
 	if err == nil {
 		t.Fatal("No error returned")
 	}
-	if err != ErrFileDoesNotExist {
-		t.Error("Putting an invalid file did not properly return ErrFileDoesNotExist")
+	if err != expectedErr {
+		if optionalMsg == "" {
+			t.Error("An error was returned, but it was of the wrong type.")
+		} else {
+			t.Error(optionalMsg)
+		}
 	}
+}
+
+func TestErrFileDoesNotExist(t *testing.T) {
+	sender := testingSender()
+	err := sender.SendFile(testingValidNumber, "/this/does/not/exist")
+	expectError(t, err, ErrFileDoesNotExist, "Putting an invalid file did not properly return ErrFileDoesNotExist")
 }
 
 func TestErrFiletypeNotSupported(t *testing.T) {
@@ -29,12 +47,13 @@ func TestErrFiletypeNotSupported(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(invalidFilePath)
-	sender := NewSender(testingPort, testingVerbose)
+	sender := testingSender()
 	err = sender.SendFile(testingValidNumber, invalidFilePath)
-	if err == nil {
-		t.Fatal("No error returned")
-	}
-	if err != ErrFiletypeNotSupported {
-		t.Error("Putting an invalid file did not properly return ErrFiletypeNotSupported")
-	}
+	expectError(t, err, ErrFiletypeNotSupported, "Putting an invalid file did not properly return ErrFiletypeNotSupported")
+}
+
+func TestErrFileIsDirectory(t *testing.T) {
+	sender := testingSender()
+	err := sender.SendFile(testingValidNumber, os.TempDir())
+	expectError(t, err, ErrFileIsDirectory, "ErrFileIsDirectory not properly returned.")
 }

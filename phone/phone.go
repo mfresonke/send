@@ -1,3 +1,4 @@
+//Package phone abstracts away sending various message types to a phone.
 package phone
 
 import (
@@ -12,29 +13,44 @@ import (
 //
 //Must be initalized with the NewSender func.
 type Sender struct {
-	acceptedNGROKTOS  bool
-	acceptedTwilioTOS bool
-	verbose           bool
-	port              int
+	verbose bool
+	port    int
+	tunnel  ngrokker.Tunneler
 }
 
-//NewSender creates a sender object with the specified options.
+//NewSender creates a new sender object with the specified options. Utilizes the
+// ngrokker pkg, and in turn, ngrok, for its introspective tunneling purposes,
+// and Twilio for its MMS sending purposes. If you'd like to override these
+// services with something else (or provide alternate options to those services)
+// see the NewCustomSender method.
 //
 //Users must accept the ngrok and Twilio ToS before sending anything.
 //
-//port must be a port that is not currently in use by another process.
+//Port will be used to create a local webserver and introspective tunnel, if
+// necessary. The port must not be currently in use by another process.
 //
-//verbose prints diagnostic information to stderr.
+//Verbose prints diagnostic information to stderr.
 func NewSender(
-	acceptedNGROKTOS, acceptedTwilioTOS bool,
+	acceptedNGROKTOS bool,
+	port int,
+	verbose bool,
+) *Sender {
+	tunnel := ngrokker.NewHTTPTunnel(acceptedNGROKTOS, verbose)
+	return NewCustomSender(tunnel, port, verbose)
+}
+
+//NewCustomSender is similar to NewSender, except that it allows you to
+// override the introspective tunneling service with your own.
+//This is also useful for testing purposes.
+func NewCustomSender(
+	tunnel ngrokker.Tunneler,
 	port int,
 	verbose bool,
 ) *Sender {
 	return &Sender{
-		acceptedTwilioTOS: acceptedTwilioTOS,
-		acceptedNGROKTOS:  acceptedNGROKTOS,
-		port:              port,
-		verbose:           verbose,
+		tunnel:  tunnel,
+		port:    port,
+		verbose: verbose,
 	}
 }
 
