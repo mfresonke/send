@@ -3,12 +3,21 @@ package phone
 
 import (
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 
 	"github.com/mfresonke/ngrokker"
+)
+
+const (
+	// callback path for twilio requests
+	twilioCallbackPath = "/callback"
+	// the prefix used before hosting files. For more info see the "file" type.
+	filePrefixPath = "/file"
 )
 
 //Sender holds the necessary values for sending supported data to a phone.
@@ -80,7 +89,7 @@ func (s Sender) SendFile(phoneNumber, filePath string) error {
 
 	// start the go webserver to serve the image
 	webserverErrChan := make(chan error, 1)
-	go serveImage(webserverErrChan, s.port, filePath)
+	go serveFile(webserverErrChan, s.port, filePath)
 
 	//open the introspective tunnel
 	_, err := s.tunnel.Open(s.port)
@@ -97,14 +106,30 @@ func (s Sender) SendFile(phoneNumber, filePath string) error {
 	return nil
 }
 
+//sendableFile represents a valid, sendable input file based on its path.
+type sendableFile string
+
+// func newFile(filePath string) file {
+//
+// }
+
+func (f sendableFile) publicURL(baseURL string) string {
+	_, fileName := path.Split(string(f))
+	urlFileName := url.QueryEscape(fileName)
+	return baseURL + filePrefixPath + "/" + urlFileName
+}
+
 var isValidPhotoExtRegex = regexp.MustCompile(".*(.jpg|.jpeg|.gif|.png|.bmp)")
 
 func isValidPhotoExt(fileExtension string) bool {
 	return isValidPhotoExtRegex.MatchString(fileExtension)
 }
 
-func serveImage(errorChan chan error, port int, filePath string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+func serveFile(errorChan chan error, port int, filePath string) {
+	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		// implement twilio callback parsing here.
+	})
+	http.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filePath)
 	})
 	bindStr := ":" + strconv.Itoa(port)
