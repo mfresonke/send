@@ -2,6 +2,7 @@
 package phone
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -74,28 +75,24 @@ func NewSenderTunnel(
 //Currently, it only supports photos, but support for additional files
 // is planned.
 func (s Sender) SendFile(phoneNumber, filePath string) error {
-	// check that the given file exists and is not a directory
-	if fileInfo, err := os.Stat(filePath); os.IsNotExist(err) {
-		return ErrFileDoesNotExist
-	} else if fileInfo.IsDir() {
-		return ErrFileIsDirectory
-	}
-
-	// check the extension of the given file to make sure it is compatible with twilio
-	fileExt := filepath.Ext(filePath)
-	if ok := isValidPhotoExt(fileExt); !ok {
-		return ErrFiletypeNotSupported
+	// validate the input file.
+	file, err := newSendableFile(filePath)
+	if err != nil {
+		return err
 	}
 
 	// start the go webserver to serve the image
 	webserverErrChan := make(chan error, 1)
-	go serveFile(webserverErrChan, s.port, filePath)
+	go serveFile(webserverErrChan, s.port, file, s.verbose)
 
 	//open the introspective tunnel
-	_, err := s.tunnel.Open(s.port)
+	_, err = s.tunnel.Open(s.port)
 	if err != nil {
 		return err
 	}
+
+	//send the image!
+	//makeTwilioRequest()
 
 	// at some point check the channels for errors
 	select {
@@ -109,12 +106,34 @@ func (s Sender) SendFile(phoneNumber, filePath string) error {
 //sendableFile represents a valid, sendable input file based on its path.
 type sendableFile string
 
-// func newFile(filePath string) file {
-//
-// }
+func newSendableFile(filePath string) (sendableFile, error) {
+	// check that the given file exists and is not a directory
+	if fileInfo, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", ErrFileDoesNotExist
+	} else if fileInfo.IsDir() {
+		return "", ErrFileIsDirectory
+	}
+
+	// check the extension of the given file to make sure it is compatible with twilio
+	fileExt := filepath.Ext(filePath)
+	if ok := isValidPhotoExt(fileExt); !ok {
+		return "", ErrFiletypeNotSupported
+	}
+	// if all looks good, return a valid file object!
+	return sendableFile(filePath), nil
+}
+
+func (f sendableFile) path() string {
+	return string(f)
+}
+
+func (f sendableFile) name() string {
+	_, fileName := path.Split(string(f))
+	return fileName
+}
 
 func (f sendableFile) publicURL(baseURL string) string {
-	_, fileName := path.Split(string(f))
+	fileName := f.name()
 	urlFileName := url.QueryEscape(fileName)
 	return baseURL + filePrefixPath + "/" + urlFileName
 }
@@ -125,12 +144,24 @@ func isValidPhotoExt(fileExtension string) bool {
 	return isValidPhotoExtRegex.MatchString(fileExtension)
 }
 
-func serveFile(errorChan chan error, port int, filePath string) {
-	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+func serveFile(errorChan chan error, port int, file sendableFile, verbose bool) {
+	http.HandleFunc(twilioCallbackPath, func(w http.ResponseWriter, r *http.Request) {
 		// implement twilio callback parsing here.
 	})
-	http.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filePath)
+	http.HandleFunc(filePrefixPath, func(w http.ResponseWriter, r *http.Request) {
+		fileName := r.URL.Path[len(filePrefixPath)+1:]
+		if fileName != file.name() {
+			if verbose {
+				log.Println(
+					"unable to serve file, as fileName and file.name() differ. fileName:",
+					fileName,
+					"file.name():",
+					file.name(),
+				)
+			}
+			return
+		}
+		http.ServeFile(w, r, file.path())
 	})
 	bindStr := ":" + strconv.Itoa(port)
 	errorChan <- http.ListenAndServe(bindStr, nil)
