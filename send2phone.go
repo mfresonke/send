@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/mfresonke/send2phone/phone"
+
 	"github.com/jessevdk/go-flags"
 )
 
@@ -13,7 +15,8 @@ type phoneNumber string
 type options struct {
 	// Example of positional arguments
 	Args struct {
-		Input string
+		PhoneNumber string
+		InputFile   string
 	} `positional-args:"yes"`
 	// SaveNumber string `short:"s" long:"save" description:"save a phone number"`
 	Verbose bool `short:"v" long:"verbose" description:"Show more information about what is happening"`
@@ -36,7 +39,12 @@ func main() {
 	check(err)
 
 	// ====== Application Logic ======
-
+	twilCfg := phone.TwilioConfig{
+	// some config here
+	}
+	sender := phone.NewSender(twilCfg, true, opts.Port, opts.Verbose)
+	err = sender.SendFile(opts.Args.PhoneNumber, opts.Args.InputFile)
+	check(err)
 }
 
 func check(err error) {
