@@ -2,7 +2,10 @@
 package phone
 
 import (
+<<<<<<< HEAD
 	"errors"
+=======
+>>>>>>> 0a17bdba6878ca51c701c787c656ce4d874e29dd
 	"log"
 	"net/http"
 	"net/url"
@@ -183,7 +186,10 @@ func serveFile(errorChan chan error, port int, file sendableFile, verbose bool) 
 		// implement twilio callback parsing here.
 	})
 	http.HandleFunc(filePrefixPath, func(w http.ResponseWriter, r *http.Request) {
+<<<<<<< HEAD
 		// converting from the the URL to the filename
+=======
+>>>>>>> 0a17bdba6878ca51c701c787c656ce4d874e29dd
 		fileName := r.URL.Path[len(filePrefixPath)+1:]
 		if fileName != file.name() {
 			if verbose {
