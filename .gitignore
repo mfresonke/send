@@ -28,3 +28,5 @@ _testmain.go
 *.jpeg
 *.gif
 *.png
+
+*.DS_Store

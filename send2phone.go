@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
-
-	"github.com/mfresonke/send2phone/phone"
+	"os"
 
 	"github.com/jessevdk/go-flags"
+
+	"github.com/mfresonke/send2phone/phone"
 )
 
 const debug = true
@@ -44,7 +46,12 @@ func main() {
 	}
 	sender := phone.NewSender(twilCfg, true, opts.Port, opts.Verbose)
 	err = sender.SendFile(opts.Args.PhoneNumber, opts.Args.InputFile)
+	if err == phone.ErrFileDoesNotExist {
+		fmt.Println("Error: File does not exist.")
+		os.Exit(1)
+	}
 	check(err)
+	fmt.Println("Main goroutine finished.")
 }
 
 func check(err error) {

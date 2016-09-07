@@ -2,10 +2,9 @@
 package phone
 
 import (
-<<<<<<< HEAD
 	"errors"
-=======
->>>>>>> 0a17bdba6878ca51c701c787c656ce4d874e29dd
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -82,12 +81,13 @@ func NewSenderTunnel(
 // is planned.
 func (s Sender) SendFile(phoneNumber, filePath string) error {
 	// validate the input file.
-	file, err := newSendableFile(filePath)
+	file, err := newSendableFile(filePath, s.verbose)
 	if err != nil {
 		return err
 	}
 
 	// start the go webserver to serve the image
+
 	webserverErrChan := make(chan error, 1)
 	go serveFile(webserverErrChan, s.port, file, s.verbose)
 
@@ -118,8 +118,11 @@ func (s Sender) SendFile(phoneNumber, filePath string) error {
 
 	// at some point check the channels for errors
 	select {
-	case _ = <-webserverErrChan:
-		//do something useful
+	case err = <-webserverErrChan:
+		if err != nil {
+			return err
+		}
+		//yay! success!
 	}
 
 	return nil
@@ -143,7 +146,8 @@ func sendMMS(cfg TwilioConfig, file sendableFile, baseURL string, phoneNumber st
 //sendableFile represents a valid, sendable input file based on its path.
 type sendableFile string
 
-func newSendableFile(filePath string) (sendableFile, error) {
+func newSendableFile(filePath string, verbose bool) (sendableFile, error) {
+	fmt.Println(filePath)
 	// check that the given file exists and is not a directory
 	if fileInfo, err := os.Stat(filePath); os.IsNotExist(err) {
 		return "", ErrFileDoesNotExist
@@ -156,8 +160,12 @@ func newSendableFile(filePath string) (sendableFile, error) {
 	if ok := isValidPhotoExt(fileExt); !ok {
 		return "", ErrFiletypeNotSupported
 	}
+	sf := sendableFile(filePath)
+	if verbose {
+		fmt.Println("File will be publicly available at ", sf.publicURL(""))
+	}
 	// if all looks good, return a valid file object!
-	return sendableFile(filePath), nil
+	return sf, nil
 }
 
 func (f sendableFile) path() string {
@@ -182,15 +190,24 @@ func isValidPhotoExt(fileExtension string) bool {
 }
 
 func serveFile(errorChan chan error, port int, file sendableFile, verbose bool) {
+	log.Printf("Servefile Goroutine online. Serving %+v.\n at %v.", file, file.publicURL(""))
 	http.HandleFunc(twilioCallbackPath, func(w http.ResponseWriter, r *http.Request) {
+		if verbose {
+			log.Println("Callback from: ", r.URL.Path)
+			body, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			log.Println("Callback Body: ", string(body))
+			close(errorChan)
+		}
 		// implement twilio callback parsing here.
 	})
-	http.HandleFunc(filePrefixPath, func(w http.ResponseWriter, r *http.Request) {
-<<<<<<< HEAD
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Request from: ", r.URL.Path)
 		// converting from the the URL to the filename
-=======
->>>>>>> 0a17bdba6878ca51c701c787c656ce4d874e29dd
-		fileName := r.URL.Path[len(filePrefixPath)+1:]
+		fileName := r.URL.Path[len(filePrefixPath)-1:]
 		if fileName != file.name() {
 			if verbose {
 				log.Println(
